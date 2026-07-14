@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Platform {
+  WEB
+  MOBILE
+  OTHER
+}
+
+model User {
+  id        String              @id @default(uuid())
+  email     String              @unique
+  name      String?
+  sessions  DoomscrollSession[]
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@map("users")
+}
+
+model DoomscrollSession {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platform        Platform @default(OTHER)
+  appName         String?
+  startedAt       DateTime
+  endedAt         DateTime?
+  durationSeconds Int?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId, startedAt])
+  @@map("doomscroll_sessions")
+}
