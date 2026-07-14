@@ -3,10 +3,6 @@
 ## Description
 Describe what this backend change provides and which app flows it supports.
 
-## Repository in scope
-Backend:
-- doomscrolling-tracker-backend
-
 ## Changes
 - Backend setup or configuration changes
 - API route changes
