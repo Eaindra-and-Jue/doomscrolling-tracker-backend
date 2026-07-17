@@ -6,3 +6,13 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+model Task {
+  id       String @id @default(uuid()) @db.Uuid
+  userId   String @map("user_id") @db.Uuid
+  title    String
+
+  @@index([userId])
+  @@index([title])
+  @@map("tasks")
+}
