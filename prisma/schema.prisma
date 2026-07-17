@@ -6,3 +6,10 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+model Application {
+  id Int @id @default(autoincrement()) 
+  name String
+  platform String
+  package_name String @unique
+}
