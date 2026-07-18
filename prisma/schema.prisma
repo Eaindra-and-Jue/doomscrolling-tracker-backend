@@ -8,11 +8,11 @@ datasource db {
 }
 
 model Task {
-  id       String @id @default(uuid()) @db.Uuid
+  id       Int    @id @default(autoincrement())
   userId   String @map("user_id") @db.Uuid
   title    String
+  position Int    @default(0)
 
   @@index([userId])
-  @@index([title])
   @@map("tasks")
 }
