@@ -12,6 +12,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/test
 
     steps:
       - name: Checkout repository
@@ -24,10 +26,10 @@ jobs:
           cache: 'npm'
       
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Run unit tests
         run: npm test
 
-      - name: Run coverage
-        run: npm run coverage
+      - name: Run typecheck
+        run: npm run typecheck
