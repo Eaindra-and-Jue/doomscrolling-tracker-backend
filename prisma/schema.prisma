@@ -8,10 +8,12 @@ datasource db {
 }
 
 model Application {
-  id Int @id @default(autoincrement()) 
-  name String
-  platform String
-  package_name String @unique
+  id          Int    @id @default(autoincrement())
+  name        String
+  platform    String
+  packageName String @unique @map("package_name")
+
+  @@map("application")
 }
 
 model Task {
@@ -19,6 +21,9 @@ model Task {
   userId   String @map("user_id") @db.Uuid
   title    String
   position Int    @default(0)
+
+  @@index([userId])
+  @@map("task")
 }
 
 model User {
@@ -27,4 +32,6 @@ model User {
   passwordHash String @map("password_hash") @db.VarChar(255)
   email        String @unique @db.VarChar(255)
   streakCount  Int    @default(0) @map("streak_count")
+
+  @@map("user")
 }
