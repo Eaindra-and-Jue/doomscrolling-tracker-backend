@@ -8,10 +8,11 @@ datasource db {
 }
 
 model Application {
-  id          Int    @id @default(autoincrement())
-  name        String
-  platform    String
-  packageName String @unique @map("package_name")
+  id               Int               @id @default(autoincrement())
+  name             String
+  platform         String
+  packageName      String            @unique @map("package_name")
+  applicationUsers ApplicationUser[]
 
   @@map("application")
 }
@@ -27,11 +28,26 @@ model Task {
 }
 
 model User {
-  id           Int    @id @default(autoincrement())
-  username     String @unique @db.VarChar(255)
-  passwordHash String @map("password_hash") @db.VarChar(255)
-  email        String @unique @db.VarChar(255)
-  streakCount  Int    @default(0) @map("streak_count")
+  id               Int               @id @default(autoincrement())
+  username         String            @unique @db.VarChar(255)
+  passwordHash     String            @map("password_hash") @db.VarChar(255)
+  email            String            @unique @db.VarChar(255)
+  streakCount      Int               @default(0) @map("streak_count")
+  applicationUsers ApplicationUser[]
 
   @@map("user")
+}
+
+
+model ApplicationUser {
+  id            Int         @id @default(autoincrement())
+  applicationId Int         @map("application_id")
+  userId        Int         @map("user_id")
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([applicationId, userId])
+  @@index([applicationId])
+  @@index([userId])
+  @@map("application_users")
 }
