@@ -27,6 +27,4 @@ model User {
   passwordHash String @map("password_hash") @db.VarChar(255)
   email        String @unique @db.VarChar(255)
   streakCount  Int    @default(0) @map("streak_count")
-
-  @@map("user")
 }
