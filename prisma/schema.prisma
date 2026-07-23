@@ -49,5 +49,5 @@ model ApplicationUser {
   @@unique([applicationId, userId])
   @@index([applicationId])
   @@index([userId])
-  @@map("application_users")
+  @@map("application_user")
 }
