@@ -5,7 +5,7 @@ import { prisma } from "./db/prisma.ts";
 
 describe("app routes", () => {
   afterEach(() => {
-    vi.resetAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("responds to GET /health", async () => {
