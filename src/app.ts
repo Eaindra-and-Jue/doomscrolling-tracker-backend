@@ -27,3 +27,6 @@ app.use((error: unknown, _request: express.Request, response: express.Response, 
     error: "Internal server error",
   });
 });
+
+import { router as applicationsRouter } from "./routes/applications.ts";
+app.use(applicationsRouter);
