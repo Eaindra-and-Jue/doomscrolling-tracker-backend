@@ -1,4 +1,5 @@
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import express from "express";
 import { prisma } from "./db/prisma.ts";
 import { userRouter } from "./routes/user.ts";
@@ -6,6 +7,7 @@ import { userRouter } from "./routes/user.ts";
 export const app = express();
 
 app.use(cors());
+app.use(cookieParser());
 app.use(express.json());
 
 app.use("/api/auth", userRouter);

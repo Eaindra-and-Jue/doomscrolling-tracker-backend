@@ -1,7 +1,16 @@
 import bcrypt from "bcryptjs";
+import type { Response } from "express";
 import { Router } from "express";
+import { env } from "../config/env.ts";
 import { prisma } from "../db/prisma.ts";
-import { createAuthToken, requireAuth } from "../middleware/auth.ts";
+import {
+  createAuthToken,
+  createRefreshToken,
+  getRefreshTokenExpiresAt,
+  hashRefreshToken,
+  REFRESH_TOKEN_COOKIE_NAME,
+  requireAuth,
+} from "../middleware/auth.ts";
 
 const SALT_ROUNDS = 12;
 
@@ -20,6 +29,42 @@ type LoginRequestBody = {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function setRefreshTokenCookie(response: Response, refreshToken: string, expiresAt: Date): void {
+  response.cookie(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
+    expires: expiresAt,
+    httpOnly: true,
+    path: "/api/auth",
+    sameSite: "lax",
+    secure: env.nodeEnv === "production",
+  });
+}
+
+function clearRefreshTokenCookie(response: Response): void {
+  response.clearCookie(REFRESH_TOKEN_COOKIE_NAME, {
+    httpOnly: true,
+    path: "/api/auth",
+    sameSite: "lax",
+    secure: env.nodeEnv === "production",
+  });
+}
+
+async function createStoredRefreshToken(userId: number, response: Response): Promise<void> {
+  const refreshToken = createRefreshToken();
+  const expiresAt = getRefreshTokenExpiresAt();
+
+  await prisma.refreshToken.create({
+    data: {
+      userId,
+      tokenHash: hashRefreshToken(refreshToken),
+      expiresAt,
+    },
+    select: {
+      id: true,
+    },
+  });
+  setRefreshTokenCookie(response, refreshToken, expiresAt);
 }
 
 userRouter.post("/register", async (request, response, next) => {
@@ -69,6 +114,7 @@ userRouter.post("/register", async (request, response, next) => {
       },
     });
     const token = createAuthToken(user);
+    await createStoredRefreshToken(user.id, response);
 
     return response.status(201).json({ user, token });
   } catch (error) {
@@ -130,8 +176,107 @@ userRouter.post("/login", async (request, response, next) => {
       streakCount: user.streakCount,
     };
     const token = createAuthToken(authenticatedUser);
+    await createStoredRefreshToken(user.id, response);
 
     return response.json({ user: authenticatedUser, token });
+  } catch (error) {
+    next(error);
+  }
+});
+
+userRouter.post("/refresh", async (request, response, next) => {
+  try {
+    const refreshToken = request.cookies?.[REFRESH_TOKEN_COOKIE_NAME];
+
+    if (!isNonEmptyString(refreshToken)) {
+      return response.status(401).json({
+        error: "Refresh token is required",
+      });
+    }
+
+    const tokenHash = hashRefreshToken(refreshToken);
+    const storedRefreshToken = await prisma.refreshToken.findFirst({
+      where: {
+        tokenHash,
+      },
+      select: {
+        id: true,
+        expiresAt: true,
+        revokedAt: true,
+        user: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            streakCount: true,
+            isActive: true,
+          },
+        },
+      },
+    });
+
+    if (!storedRefreshToken || storedRefreshToken.revokedAt || storedRefreshToken.expiresAt <= new Date()) {
+      clearRefreshTokenCookie(response);
+
+      return response.status(401).json({
+        error: "Invalid refresh token",
+      });
+    }
+
+    if (!storedRefreshToken.user.isActive) {
+      clearRefreshTokenCookie(response);
+
+      return response.status(403).json({
+        error: "Account is inactive",
+      });
+    }
+
+    await prisma.refreshToken.update({
+      where: {
+        id: storedRefreshToken.id,
+      },
+      data: {
+        revokedAt: new Date(),
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const user = {
+      id: storedRefreshToken.user.id,
+      username: storedRefreshToken.user.username,
+      email: storedRefreshToken.user.email,
+      streakCount: storedRefreshToken.user.streakCount,
+    };
+    const token = createAuthToken(user);
+    await createStoredRefreshToken(user.id, response);
+
+    return response.json({ user, token });
+  } catch (error) {
+    next(error);
+  }
+});
+
+userRouter.post("/logout", async (request, response, next) => {
+  try {
+    const refreshToken = request.cookies?.[REFRESH_TOKEN_COOKIE_NAME];
+
+    if (isNonEmptyString(refreshToken)) {
+      await prisma.refreshToken.updateMany({
+        where: {
+          tokenHash: hashRefreshToken(refreshToken),
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: new Date(),
+        },
+      });
+    }
+
+    clearRefreshTokenCookie(response);
+
+    return response.json({ status: "ok" });
   } catch (error) {
     next(error);
   }

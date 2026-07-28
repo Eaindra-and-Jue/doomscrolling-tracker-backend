@@ -1,10 +1,15 @@
 import request from "supertest";
 import jwt from "jsonwebtoken";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { hashRefreshToken, REFRESH_TOKEN_COOKIE_NAME } from "../middleware/auth.ts";
 
 const mocks = vi.hoisted(() => ({
   createUser: vi.fn(),
   findUser: vi.fn(),
+  createRefreshToken: vi.fn(),
+  findRefreshToken: vi.fn(),
+  updateRefreshToken: vi.fn(),
+  updateManyRefreshToken: vi.fn(),
   comparePassword: vi.fn(),
   hashPassword: vi.fn(),
 }));
@@ -14,6 +19,12 @@ vi.mock("../db/prisma.ts", () => ({
     user: {
       create: mocks.createUser,
       findFirst: mocks.findUser,
+    },
+    refreshToken: {
+      create: mocks.createRefreshToken,
+      findFirst: mocks.findRefreshToken,
+      update: mocks.updateRefreshToken,
+      updateMany: mocks.updateManyRefreshToken,
     },
   },
 }));
@@ -31,7 +42,10 @@ describe("user routes", () => {
   beforeEach(() => {
     process.env.JWT_SECRET = "test-secret";
     mocks.comparePassword.mockResolvedValue(true);
+    mocks.createRefreshToken.mockResolvedValue({ id: 1 });
     mocks.hashPassword.mockResolvedValue("hashed-password");
+    mocks.updateRefreshToken.mockResolvedValue({ id: 1 });
+    mocks.updateManyRefreshToken.mockResolvedValue({ count: 1 });
   });
 
   afterEach(() => {
@@ -84,6 +98,18 @@ describe("user routes", () => {
         streakCount: true,
       },
     });
+    expect(mocks.createRefreshToken).toHaveBeenCalledWith({
+      data: {
+        userId: 1,
+        tokenHash: expect.any(String),
+        expiresAt: expect.any(Date),
+      },
+      select: {
+        id: true,
+      },
+    });
+    expect(response.headers["set-cookie"][0]).toContain(`${REFRESH_TOKEN_COOKIE_NAME}=`);
+    expect(response.headers["set-cookie"][0]).toContain("HttpOnly");
   });
 
   it("rejects missing required fields", async () => {
@@ -163,6 +189,16 @@ describe("user routes", () => {
       },
     });
     expect(mocks.comparePassword).toHaveBeenCalledWith("password123", "hashed-password");
+    expect(mocks.createRefreshToken).toHaveBeenCalledWith({
+      data: {
+        userId: 1,
+        tokenHash: expect.any(String),
+        expiresAt: expect.any(Date),
+      },
+      select: {
+        id: true,
+      },
+    });
   });
 
   it("logs in a user with username", async () => {
@@ -260,6 +296,209 @@ describe("user routes", () => {
       error: "Account is inactive",
     });
     expect(mocks.comparePassword).not.toHaveBeenCalled();
+  });
+
+  it("refreshes an access token and rotates refresh token", async () => {
+    const oldRefreshToken = "old-refresh-token";
+    const oldRefreshTokenHash = hashRefreshToken(oldRefreshToken);
+    mocks.findRefreshToken.mockResolvedValue({
+      id: 1,
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: null,
+      user: {
+        id: 1,
+        username: "testuser",
+        email: "test@example.com",
+        streakCount: 0,
+        isActive: true,
+      },
+    });
+
+    const response = await request(app).post("/api/auth/refresh").set("Cookie", [
+      `${REFRESH_TOKEN_COOKIE_NAME}=${oldRefreshToken}`,
+    ]);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      user: {
+        id: 1,
+        username: "testuser",
+        email: "test@example.com",
+        streakCount: 0,
+      },
+      token: expect.any(String),
+    });
+    expect(mocks.findRefreshToken).toHaveBeenCalledWith({
+      where: {
+        tokenHash: oldRefreshTokenHash,
+      },
+      select: {
+        id: true,
+        expiresAt: true,
+        revokedAt: true,
+        user: {
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            streakCount: true,
+            isActive: true,
+          },
+        },
+      },
+    });
+    expect(mocks.updateRefreshToken).toHaveBeenCalledWith({
+      where: {
+        id: 1,
+      },
+      data: {
+        revokedAt: expect.any(Date),
+      },
+      select: {
+        id: true,
+      },
+    });
+    expect(mocks.createRefreshToken).toHaveBeenCalledWith({
+      data: {
+        userId: 1,
+        tokenHash: expect.any(String),
+        expiresAt: expect.any(Date),
+      },
+      select: {
+        id: true,
+      },
+    });
+    expect(response.headers["set-cookie"][0]).toContain(`${REFRESH_TOKEN_COOKIE_NAME}=`);
+    expect(response.headers["set-cookie"][0]).toContain("HttpOnly");
+  });
+
+  it("rejects refresh without a refresh token cookie", async () => {
+    const response = await request(app).post("/api/auth/refresh");
+
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({
+      error: "Refresh token is required",
+    });
+    expect(mocks.findRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it("rejects refresh with an invalid refresh token", async () => {
+    mocks.findRefreshToken.mockResolvedValue(null);
+
+    const response = await request(app).post("/api/auth/refresh").set("Cookie", [
+      `${REFRESH_TOKEN_COOKIE_NAME}=invalid-refresh-token`,
+    ]);
+
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({
+      error: "Invalid refresh token",
+    });
+    expect(response.headers["set-cookie"][0]).toContain(`${REFRESH_TOKEN_COOKIE_NAME}=;`);
+  });
+
+  it("rejects refresh with an expired refresh token", async () => {
+    mocks.findRefreshToken.mockResolvedValue({
+      id: 1,
+      expiresAt: new Date(Date.now() - 60_000),
+      revokedAt: null,
+      user: {
+        id: 1,
+        username: "testuser",
+        email: "test@example.com",
+        streakCount: 0,
+        isActive: true,
+      },
+    });
+
+    const response = await request(app).post("/api/auth/refresh").set("Cookie", [
+      `${REFRESH_TOKEN_COOKIE_NAME}=expired-refresh-token`,
+    ]);
+
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({
+      error: "Invalid refresh token",
+    });
+    expect(mocks.updateRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it("rejects refresh with a revoked refresh token", async () => {
+    mocks.findRefreshToken.mockResolvedValue({
+      id: 1,
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: new Date(),
+      user: {
+        id: 1,
+        username: "testuser",
+        email: "test@example.com",
+        streakCount: 0,
+        isActive: true,
+      },
+    });
+
+    const response = await request(app).post("/api/auth/refresh").set("Cookie", [
+      `${REFRESH_TOKEN_COOKIE_NAME}=revoked-refresh-token`,
+    ]);
+
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({
+      error: "Invalid refresh token",
+    });
+    expect(mocks.updateRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it("rejects refresh for an inactive user", async () => {
+    mocks.findRefreshToken.mockResolvedValue({
+      id: 1,
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: null,
+      user: {
+        id: 1,
+        username: "testuser",
+        email: "test@example.com",
+        streakCount: 0,
+        isActive: false,
+      },
+    });
+
+    const response = await request(app).post("/api/auth/refresh").set("Cookie", [
+      `${REFRESH_TOKEN_COOKIE_NAME}=inactive-refresh-token`,
+    ]);
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({
+      error: "Account is inactive",
+    });
+    expect(mocks.updateRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it("logs out and clears the refresh token cookie", async () => {
+    const refreshToken = "refresh-token";
+
+    const response = await request(app).post("/api/auth/logout").set("Cookie", [
+      `${REFRESH_TOKEN_COOKIE_NAME}=${refreshToken}`,
+    ]);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ status: "ok" });
+    expect(mocks.updateManyRefreshToken).toHaveBeenCalledWith({
+      where: {
+        tokenHash: hashRefreshToken(refreshToken),
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: expect.any(Date),
+      },
+    });
+    expect(response.headers["set-cookie"][0]).toContain(`${REFRESH_TOKEN_COOKIE_NAME}=;`);
+  });
+
+  it("logs out successfully without a refresh token cookie", async () => {
+    const response = await request(app).post("/api/auth/logout");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ status: "ok" });
+    expect(mocks.updateManyRefreshToken).not.toHaveBeenCalled();
+    expect(response.headers["set-cookie"][0]).toContain(`${REFRESH_TOKEN_COOKIE_NAME}=;`);
   });
 
   it("rejects protected requests without a bearer token", async () => {
