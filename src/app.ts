@@ -2,8 +2,12 @@ import express from "express";
 import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
 import { prisma } from "./db/prisma.ts";
+import cors from "cors";
+
 
 export const app = express();
+
+app.use(cors());
 
 const swaggerOptions = {
   definition: {
