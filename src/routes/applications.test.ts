@@ -14,6 +14,7 @@ describe("GET /applications", () => {
       { id: 2, name: "App 2", platform: "Android", packageName: "com.app2" },
     ];
 
+    vi.spyOn(prisma.application, "count").mockResolvedValueOnce(2);
     vi.spyOn(prisma.application, "findMany").mockResolvedValueOnce(
       mockApplications,
     );
@@ -21,15 +22,26 @@ describe("GET /applications", () => {
     const response = await request(app).get("/applications");
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual(mockApplications);
+    expect(response.body).toEqual({
+        data: mockApplications,
+        page: 1,
+        perPage: 20,
+        total: 2
+    });
   });
 
   it("return an empty array when no applications exist", async () => {
+    vi.spyOn(prisma.application, "count").mockResolvedValueOnce(0);
     vi.spyOn(prisma.application, "findMany").mockResolvedValueOnce([]);
 
     const response = await request(app).get("/applications");
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual([]);
+    expect(response.body).toEqual({
+      data: [],
+      page: 1,
+      perPage: 20,
+      total: 0,
+    });
   });
 });
