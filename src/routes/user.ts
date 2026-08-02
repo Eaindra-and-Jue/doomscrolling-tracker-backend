@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { Router } from "express";
 import { prisma } from "../db/prisma.ts";
-import { createAuthToken, requireAuth } from "../middleware/auth.ts";
+import { createAuthToken, requireAuth } from "../middlewares/auth.ts";
 
 const SALT_ROUNDS = 12;
 
