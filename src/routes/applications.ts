@@ -30,18 +30,36 @@ export const router = express.Router();
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   id:
- *                     type: integer
- *                   name:
- *                     type: string
- *                   platform:
- *                     type: string
- *                   packageName:
- *                     type: string
+ *               type: object
+ *               required:
+ *                 - data
+ *                 - page
+ *                 - perPage
+ *                 - total
+ *               properties:
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                       name:
+ *                         type: string
+ *                       platform:
+ *                         type: string
+ *                       packageName:
+ *                         type: string
+ *                 page:
+ *                   type: integer
+ *                   minimum: 1
+ *                 perPage:
+ *                   type: integer
+ *                   minimum: 1
+ *                   maximum: 100
+ *                 total:
+ *                   type: integer
+ *                   minimum: 0
  *       500:
  *         description: Internal server error
  *         content:
