@@ -1,4 +1,4 @@
-import type { AuthenticatedUser } from "../middlewares/auth.ts";
+import type { AuthenticatedUser } from "../middlewares/auth.middleware.ts";
 
 declare global {
   namespace Express {

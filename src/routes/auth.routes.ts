@@ -1,11 +1,11 @@
 import bcrypt from "bcryptjs";
 import { Router } from "express";
 import { prisma } from "../db/prisma.ts";
-import { createAuthToken, requireAuth } from "../middlewares/auth.ts";
+import { createAuthToken, requireAuth } from "../middlewares/auth.middleware.ts";
 
 const SALT_ROUNDS = 12;
 
-export const userRouter = Router();
+export const authRouter = Router();
 
 type RegisterRequestBody = {
   username?: unknown;
@@ -22,7 +22,7 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-userRouter.post("/register", async (request, response, next) => {
+authRouter.post("/register", async (request, response, next) => {
   try {
     const { username, email, password } = request.body as RegisterRequestBody;
 
@@ -76,7 +76,7 @@ userRouter.post("/register", async (request, response, next) => {
   }
 });
 
-userRouter.post("/login", async (request, response, next) => {
+authRouter.post("/login", async (request, response, next) => {
   try {
     const { identifier, password } = request.body as LoginRequestBody;
 
@@ -137,6 +137,6 @@ userRouter.post("/login", async (request, response, next) => {
   }
 });
 
-userRouter.get("/me", requireAuth, (request, response) => {
+authRouter.get("/me", requireAuth, (request, response) => {
   response.json({ user: request.authUser });
 });
