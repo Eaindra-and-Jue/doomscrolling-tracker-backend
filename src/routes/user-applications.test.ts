@@ -1,6 +1,10 @@
 import request from "supertest";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { app } from "../app.ts";
+
+const mocks = vi.hoisted(() => {
+    findManyUserApplications: vi.fn();
+});
 
 describe("user application routes", () => {
   it("rejects requests without a bearer token", async () => {
@@ -11,4 +15,6 @@ describe("user application routes", () => {
       error: "Bearer token is required",
     });
   });
+
+
 });
