@@ -33,6 +33,9 @@ model User {
   passwordHash     String            @map("password_hash") @db.VarChar(255)
   email            String            @unique @db.VarChar(255)
   streakCount      Int               @default(0) @map("streak_count")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  deletedAt        DateTime?         @map("deleted_at")
+  isActive         Boolean           @default(true) @map("is_active")
   applicationUsers ApplicationUser[]
 
   @@map("user")
