@@ -22,6 +22,57 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+/**
+ * @openapi
+ * /api/auth/register:
+ *   post:
+ *     summary: Register a new user
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - username
+ *               - email
+ *               - password
+ *             properties:
+ *               username:
+ *                 type: string
+ *                 example: testuser
+ *               email:
+ *                 type: string
+ *                 example: test@example.com
+ *               password:
+ *                 type: string
+ *                 example: password123
+ *     responses:
+ *       201:
+ *         description: User registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 user:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                     username:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                     streakCount:
+ *                       type: integer
+ *                 token:
+ *                   type: string
+ *       400:
+ *         description: Missing required fields
+ *       409:
+ *         description: Username or email already exists
+ */
 authRouter.post("/register", async (request, response, next) => {
   try {
     const { username, email, password } = request.body as RegisterRequestBody;
@@ -137,6 +188,19 @@ authRouter.post("/login", async (request, response, next) => {
   }
 });
 
+/**
+ * @openapi
+ * /api/auth/me:
+ *   get:
+ *     summary: Get current authenticated user
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Returns current user
+ *       401:
+ *         description: Missing or invalid token
+ */
 authRouter.get("/me", requireAuth, (request, response) => {
   response.json({ user: request.authUser });
 });
