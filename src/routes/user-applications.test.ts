@@ -4,12 +4,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   findManyUserApplications: vi.fn(),
+  findApplication: vi.fn(),
+  findUniqueUserApplication: vi.fn(),
+  createUserApplication: vi.fn(),
 }));
 
 vi.mock("../db/prisma.ts", () => ({
   prisma: {
+    application: {
+      findUnique: mocks.findApplication,
+    },
     applicationUser: {
       findMany: mocks.findManyUserApplications,
+      findUnique: mocks.findUniqueUserApplication,
+      create: mocks.createUserApplication,
     },
   },
 }));
@@ -93,6 +101,72 @@ describe("user application routes", () => {
       orderBy: {
         id: "asc",
       },
+    });
+  });
+
+  it("add the application to the authenticated user", async () => {
+    mocks.findApplication.mockResolvedValue({
+      id: 7,
+      name: "YouTube",
+      platform: "android",
+      packageName: "com.google.android.youtube",
+    });
+
+    mocks.findUniqueUserApplication.mockResolvedValue(null);
+
+    mocks.createUserApplication.mockResolvedValue({
+      id: 10,
+      userId: 1,
+      applicationId: 7,
+      application: {
+        id: 7,
+        name: "YouTube",
+        platform: "android",
+        packageName: "com.google.android.youtube",
+      },
+    });
+
+    const response = await request(app)
+      .post("/api/user-authentications")
+      .set("Authorization", `Bearere ${createToken()}`)
+      .send({ applicationId: 7 });
+
+    expect(response.statusCode).toBe(201);
+
+    expect(response.body).toEqual({
+      userApplication: {
+        id: 10,
+        userId: 1,
+        applicationId: 7,
+        application: {
+          id: 7,
+          name: "YouTube",
+          platform: "android",
+          packageName: "com.google.android.youtube",
+        },
+      },
+    });
+
+    expect(mocks.createUserApplication).toHaveBeenCalledWith({
+      data: {
+        userId: 1,
+        applicationId: 7,
+      },
+      include: {
+        application: true,
+      },
+    });
+  });
+
+  it("rejects a missing applicationId", async () => {
+    const response = await request(app)
+      .post("/api/user-applications")
+      .set("Authorization", `Bearer ${createToken()}`)
+      .send({});
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: "applicationId must be a positive integer",
     });
   });
 });
