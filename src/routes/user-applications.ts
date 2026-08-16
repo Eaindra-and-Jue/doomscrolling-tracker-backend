@@ -26,3 +26,43 @@ userApplicationRouter.get("/", async (request, response, next) => {
     next(error);
   }
 });
+
+userApplicationRouter.post("/", async (request, response, next) => {
+  try {
+    const userId = request.authUser!.id;
+    
+    const { applicationId } = request.body as {
+      applicationId?: unknown;
+    };
+
+    if (
+      typeof applicationId !== "number" ||
+      !Number.isInteger(applicationId) ||
+      applicationId <= 0
+    ) {
+      response.status(400).json({
+        error: "applicationId must be a positive integer",
+      });
+      return;
+    }
+
+    const application = await prisma.application.findUnique({
+      where: {
+        id: applicationId,
+      },
+    });
+
+    if (!application) {
+      response.status(400).json({
+        error: "Application not found",
+      });
+      return;
+    }
+
+    response.status(501).json({
+      error: "Not Implemented",
+    });
+  } catch (error) {
+    next(error);
+  }
+});

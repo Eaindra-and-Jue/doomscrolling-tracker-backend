@@ -127,8 +127,8 @@ describe("user application routes", () => {
     });
 
     const response = await request(app)
-      .post("/api/user-authentications")
-      .set("Authorization", `Bearere ${createToken()}`)
+      .post("/api/user-applications")
+      .set("Authorization", `Bearer ${createToken()}`)
       .send({ applicationId: 7 });
 
     expect(response.statusCode).toBe(201);
@@ -168,5 +168,35 @@ describe("user application routes", () => {
     expect(response.body).toEqual({
       error: "applicationId must be a positive integer",
     });
+  });
+
+  it("reject an application already assigned to the user", async () => {
+    mocks.findApplication.mockResolvedValue({
+      id: 7,
+      name: "YouTube",
+      platform: "android",
+      packageName: "com.google.android.youtube",
+    });
+
+    mocks.findUniqueUserApplication.mockResolvedValue({
+      id: 10,
+      userId: 1,
+      applicationId: 7,
+    });
+
+    const response = await request(app)
+      .post("/api/user-applications")
+      .set("Authorization", `Bearer ${createToken()}`)
+      .send({
+        applicationId: 7,
+      });
+
+    expect(response.status).toBe(409);
+
+    expect(response.body).toEqual({
+      error: "Application is already assigned to this user",
+    });
+
+    expect(mocks.createUserApplication).not.toHaveBeenCalled();
   });
 });
