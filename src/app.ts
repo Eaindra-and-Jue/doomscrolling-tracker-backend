@@ -3,13 +3,19 @@ import cookieParser from "cookie-parser";
 import express from "express";
 import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
+import { env } from "./config/env.ts";
 import { prisma } from "./db/prisma.ts";
 import { authRouter } from "./routes/auth.routes.ts";
 import { router as applicationsRouter } from "./routes/applications.ts";
 
 export const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    credentials: true,
+    origin: env.nodeEnv === "production" ? env.corsOrigin ?? false : true,
+  }),
+);
 
 const swaggerOptions = {
   definition: {

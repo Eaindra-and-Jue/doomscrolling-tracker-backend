@@ -17,6 +17,14 @@ describe("app routes", () => {
     });
   });
 
+  it("allows browser requests to include cookies", async () => {
+    const origin = "http://localhost:5173";
+    const response = await request(app).get("/health").set("Origin", origin);
+
+    expect(response.headers["access-control-allow-origin"]).toBe(origin);
+    expect(response.headers["access-control-allow-credentials"]).toBe("true");
+  });
+
   it("responds to GET /health/db when the database is available", async () => {
     vi.spyOn(prisma, "$queryRaw").mockResolvedValueOnce(1);
     const response = await request(app).get("/health/db");

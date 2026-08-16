@@ -6,6 +6,7 @@ export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: Number(process.env.PORT ?? DEFAULT_PORT),
   databaseUrl: process.env.DATABASE_URL,
+  corsOrigin: process.env.CORS_ORIGIN,
   get jwtSecret() {
     return process.env.JWT_SECRET;
   },
