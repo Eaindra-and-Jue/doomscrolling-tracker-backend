@@ -3,7 +3,7 @@ import express from "express";
 import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
 import { prisma } from "./db/prisma.ts";
-import { userRouter } from "./routes/user.ts";
+import { authRouter } from "./routes/auth.routes.ts";
 import { router as applicationsRouter } from "./routes/applications.ts";
 
 export const app = express();
@@ -18,6 +18,15 @@ const swaggerOptions = {
       version: "1.0.0",
       description: "API docs for the doomscrolling-tracker-backend",
     },
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+        },
+      },
+    },
   },
   apis: ["./src/routes/*.ts", "./src/app.ts"],
 }
@@ -28,7 +37,7 @@ app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use(express.json());
 
-app.use("/api/auth", userRouter);
+app.use("/api/auth", authRouter);
 
 app.get("/health", (_request, response) => {
   response.json({
