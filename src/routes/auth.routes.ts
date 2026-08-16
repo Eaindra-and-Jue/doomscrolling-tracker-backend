@@ -348,6 +348,7 @@ authRouter.post("/refresh", async (request, response, next) => {
             email: true,
             streakCount: true,
             isActive: true,
+            deletedAt: true,
           },
         },
       },
@@ -361,7 +362,7 @@ authRouter.post("/refresh", async (request, response, next) => {
       });
     }
 
-    if (!storedRefreshToken.user.isActive) {
+    if (!storedRefreshToken.user.isActive || storedRefreshToken.user.deletedAt) {
       clearRefreshTokenCookie(response);
 
       return response.status(403).json({

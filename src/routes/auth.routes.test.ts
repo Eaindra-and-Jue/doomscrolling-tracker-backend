@@ -311,6 +311,7 @@ describe("user routes", () => {
         email: "test@example.com",
         streakCount: 0,
         isActive: true,
+        deletedAt: null,
       },
     });
 
@@ -343,6 +344,7 @@ describe("user routes", () => {
             email: true,
             streakCount: true,
             isActive: true,
+            deletedAt: true,
           },
         },
       },
@@ -407,6 +409,7 @@ describe("user routes", () => {
         email: "test@example.com",
         streakCount: 0,
         isActive: true,
+        deletedAt: null,
       },
     });
 
@@ -432,6 +435,7 @@ describe("user routes", () => {
         email: "test@example.com",
         streakCount: 0,
         isActive: true,
+        deletedAt: null,
       },
     });
 
@@ -457,11 +461,38 @@ describe("user routes", () => {
         email: "test@example.com",
         streakCount: 0,
         isActive: false,
+        deletedAt: null,
       },
     });
 
     const response = await request(app).post("/api/auth/refresh").set("Cookie", [
       `${REFRESH_TOKEN_COOKIE_NAME}=inactive-refresh-token`,
+    ]);
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({
+      error: "Account is inactive",
+    });
+    expect(mocks.updateRefreshToken).not.toHaveBeenCalled();
+  });
+
+  it("rejects refresh for a deleted user", async () => {
+    mocks.findRefreshToken.mockResolvedValue({
+      id: 1,
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: null,
+      user: {
+        id: 1,
+        username: "testuser",
+        email: "test@example.com",
+        streakCount: 0,
+        isActive: true,
+        deletedAt: new Date(),
+      },
+    });
+
+    const response = await request(app).post("/api/auth/refresh").set("Cookie", [
+      `${REFRESH_TOKEN_COOKIE_NAME}=deleted-user-refresh-token`,
     ]);
 
     expect(response.status).toBe(403);
