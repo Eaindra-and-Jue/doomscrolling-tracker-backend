@@ -18,6 +18,15 @@ const swaggerOptions = {
       version: "1.0.0",
       description: "API docs for the doomscrolling-tracker-backend",
     },
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+        },
+      },
+    },
   },
   apis: ["./src/routes/*.ts", "./src/app.ts"],
 }
