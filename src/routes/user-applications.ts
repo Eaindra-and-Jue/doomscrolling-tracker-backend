@@ -30,7 +30,7 @@ userApplicationRouter.get("/", async (request, response, next) => {
 userApplicationRouter.post("/", async (request, response, next) => {
   try {
     const userId = request.authUser!.id;
-    
+
     const { applicationId } = request.body as {
       applicationId?: unknown;
     };
@@ -53,14 +53,40 @@ userApplicationRouter.post("/", async (request, response, next) => {
     });
 
     if (!application) {
-      response.status(400).json({
+      response.status(404).json({
         error: "Application not found",
       });
       return;
     }
 
-    response.status(501).json({
-      error: "Not Implemented",
+    const existingUserApplication = await prisma.applicationUser.findUnique({
+      where: {
+        applicationId_userId: {
+          applicationId,
+          userId,
+        },
+      },
+    });
+
+    if (existingUserApplication) {
+      response.status(409).json({
+        error: "Application is already assigned to this user",
+      });
+      return;
+    }
+
+    const userApplication = await prisma.applicationUser.create({
+      data: {
+        userId,
+        applicationId,
+      },
+      include: {
+        application: true,
+      },
+    });
+
+    response.status(201).json({
+      userApplication,
     });
   } catch (error) {
     next(error);
