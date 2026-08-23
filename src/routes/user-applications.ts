@@ -92,3 +92,69 @@ userApplicationRouter.post("/", async (request, response, next) => {
     next(error);
   }
 });
+
+userApplicationRouter.put("/:id", async (request, response, next) => {
+  try {
+    const userId = request.authUser!.id;
+    const { applicationId } = request.body as {
+      applicationId?: unknown;
+    };
+    const relationshipId = Number(request.params.id);
+
+    if (
+      typeof applicationId !== "number" ||
+      !Number.isInteger(applicationId) ||
+      applicationId <= 0
+    ) {
+      response.status(400).json({
+        error: "applicationId must be a positive integer",
+      });
+      return;
+    }
+
+    const application = await prisma.application.findUnique({
+      where: {
+        id: applicationId,
+      },
+    });
+
+    if (!application) {
+      response.status(400).json({
+        error: "Application not found",
+      });
+    }
+
+    const existingUserApplication = await prisma.applicationUser.findUnique({
+      where: {
+        applicationId_userId: {
+          userId,
+          applicationId,
+        },
+      },
+    });
+
+    if (existingUserApplication) {
+      response.status(409).json({
+        error: "Application is already assigned to this user",
+      });
+    }
+
+    const userApplication = await prisma.applicationUser.update({
+      where: {
+        id: relationshipId,
+      },
+      data: {
+        applicationId,
+      },
+      include: {
+        application: true,
+      },
+    });
+
+    response.status(200).json({
+      userApplication,
+    });
+  } catch (error) {
+    next(error);
+  }
+});

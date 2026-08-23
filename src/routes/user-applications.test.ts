@@ -7,6 +7,9 @@ const mocks = vi.hoisted(() => ({
   findApplication: vi.fn(),
   findUniqueUserApplication: vi.fn(),
   createUserApplication: vi.fn(),
+
+  findOwnedUserApplication: vi.fn(),
+  updateUserApplication: vi.fn(),
 }));
 
 vi.mock("../db/prisma.ts", () => ({
@@ -18,6 +21,8 @@ vi.mock("../db/prisma.ts", () => ({
       findMany: mocks.findManyUserApplications,
       findUnique: mocks.findUniqueUserApplication,
       create: mocks.createUserApplication,
+      findFirst: mocks.findOwnedUserApplication,
+      update: mocks.updateUserApplication,
     },
   },
 }));
@@ -198,5 +203,72 @@ describe("user application routes", () => {
     });
 
     expect(mocks.createUserApplication).not.toHaveBeenCalled();
+  });
+
+  it("update the application belonging to the authenticated user", async () => {
+    // Arrange: relationship 10 belongs to user 1
+    mocks.findOwnedUserApplication.mockResolvedValue({
+      id: 10,
+      userId: 1,
+      applicationId: 2,
+    });
+
+    // Arrange: the new application exists
+    mocks.findApplication.mockResolvedValue({
+      id: 3,
+      name: "YouTube",
+      platform: "android",
+      packageName: "youtube.example.com",
+    });
+
+    // Arrange: user 1 does not already have application 3
+    mocks.findUniqueUserApplication.mockResolvedValue(null);
+
+    mocks.updateUserApplication.mockResolvedValue({
+      id: 10,
+      userId: 1,
+      applicationId: 3,
+      application: {
+        id: 3,
+        name: "YouTube",
+        platform: "android",
+        packageName: "youtube.example.com",
+      },
+    });
+
+    const response = await request(app)
+      .put("/api/user-applications/10")
+      .set("Authorization", `Bearer ${createToken()}`)
+      .send({
+        applicationId: 3,
+      });
+
+    expect(response.status).toBe(200);
+
+    expect(response.body).toEqual({
+      userApplication: {
+        id: 10,
+        userId: 1,
+        applicationId: 3,
+        application: {
+          id: 3,
+          name: "YouTube",
+          platform: "android",
+          packageName: "youtube.example.com",
+        },
+      },
+    });
+
+    expect(mocks.updateUserApplication).toHaveBeenCalledWith({
+      where: {
+        id: 10,
+      },
+      data: {
+        applicationId: 3,
+      },
+      include: {
+        application: true,
+      },
+    });
   });
 });
