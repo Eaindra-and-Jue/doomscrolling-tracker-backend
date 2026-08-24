@@ -101,6 +101,13 @@ userApplicationRouter.put("/:id", async (request, response, next) => {
     };
     const relationshipId = Number(request.params.id);
 
+    if (!Number.isInteger(relationshipId) || relationshipId <= 0) {
+      response.status(400).json({
+        error: "id must be a positive integer",
+      });
+      return;
+    }
+
     if (
       typeof applicationId !== "number" ||
       !Number.isInteger(applicationId) ||
@@ -112,6 +119,20 @@ userApplicationRouter.put("/:id", async (request, response, next) => {
       return;
     }
 
+    const ownedUserApplication = await prisma.applicationUser.findFirst({
+      where: {
+        id: relationshipId,
+        userId,
+      },
+    });
+
+    if (!ownedUserApplication) {
+      response.status(404).json({
+        error: "User application not found",
+      });
+      return;
+    }
+
     const application = await prisma.application.findUnique({
       where: {
         id: applicationId,
@@ -119,9 +140,10 @@ userApplicationRouter.put("/:id", async (request, response, next) => {
     });
 
     if (!application) {
-      response.status(400).json({
+      response.status(404).json({
         error: "Application not found",
       });
+      return;
     }
 
     const existingUserApplication = await prisma.applicationUser.findUnique({
@@ -137,6 +159,7 @@ userApplicationRouter.put("/:id", async (request, response, next) => {
       response.status(409).json({
         error: "Application is already assigned to this user",
       });
+      return;
     }
 
     const userApplication = await prisma.applicationUser.update({
