@@ -49,7 +49,7 @@ describe("user application routes", () => {
 
   afterEach(() => {
     delete process.env.JWT_SECRET;
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   it("rejects requests without a bearer token", async () => {
@@ -205,48 +205,27 @@ describe("user application routes", () => {
     expect(mocks.createUserApplication).not.toHaveBeenCalled();
   });
 
-  it("update the application belonging to the authenticated user", async () => {
-    // Arrange: relationship 10 belongs to user 1
-    mocks.findOwnedUserApplication.mockResolvedValue({
-      id: 10,
-      userId: 1,
-      applicationId: 2,
-    });
+  describe("PUT /api/user-applications/:id", () => {
+    it("updates an application relationship owned by the authenticated user", async () => {
+      // Arrange: relationship 10 belongs to user 1
+      mocks.findOwnedUserApplication.mockResolvedValue({
+        id: 10,
+        userId: 1,
+        applicationId: 2,
+      });
 
-    // Arrange: the new application exists
-    mocks.findApplication.mockResolvedValue({
-      id: 3,
-      name: "YouTube",
-      platform: "android",
-      packageName: "youtube.example.com",
-    });
-
-    // Arrange: user 1 does not already have application 3
-    mocks.findUniqueUserApplication.mockResolvedValue(null);
-
-    mocks.updateUserApplication.mockResolvedValue({
-      id: 10,
-      userId: 1,
-      applicationId: 3,
-      application: {
+      // Arrange: the new application exists
+      mocks.findApplication.mockResolvedValue({
         id: 3,
         name: "YouTube",
         platform: "android",
         packageName: "youtube.example.com",
-      },
-    });
-
-    const response = await request(app)
-      .put("/api/user-applications/10")
-      .set("Authorization", `Bearer ${createToken()}`)
-      .send({
-        applicationId: 3,
       });
 
-    expect(response.status).toBe(200);
+      // Arrange: user 1 does not already have application 3
+      mocks.findUniqueUserApplication.mockResolvedValue(null);
 
-    expect(response.body).toEqual({
-      userApplication: {
+      mocks.updateUserApplication.mockResolvedValue({
         id: 10,
         userId: 1,
         applicationId: 3,
@@ -256,19 +235,115 @@ describe("user application routes", () => {
           platform: "android",
           packageName: "youtube.example.com",
         },
-      },
+      });
+
+      const response = await request(app)
+        .put("/api/user-applications/10")
+        .set("Authorization", `Bearer ${createToken()}`)
+        .send({
+          applicationId: 3,
+        });
+
+      expect(response.status).toBe(200);
+
+      expect(response.body).toEqual({
+        userApplication: {
+          id: 10,
+          userId: 1,
+          applicationId: 3,
+          application: {
+            id: 3,
+            name: "YouTube",
+            platform: "android",
+            packageName: "youtube.example.com",
+          },
+        },
+      });
+
+      expect(mocks.updateUserApplication).toHaveBeenCalledWith({
+        where: {
+          id: 10,
+        },
+        data: {
+          applicationId: 3,
+        },
+        include: {
+          application: true,
+        },
+      });
     });
 
-    expect(mocks.updateUserApplication).toHaveBeenCalledWith({
-      where: {
+    it("returns 400 when the relationship ID is invalid", async () => {
+      const response = await request(app)
+        .put("/api/user-applications/abc")
+        .set("Authorization", `Bearer ${createToken()}`)
+        .send({
+          applicationId: 3,
+        });
+
+      expect(response.status).toBe(400);
+
+      expect(response.body).toEqual({
+        error: "id must be a positive integer",
+      });
+
+      expect(mocks.findOwnedUserApplication).not.toHaveBeenCalled();
+      expect(mocks.updateUserApplication).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 when the application ID is invalid", async () => {
+      const response = await request(app)
+        .put("/api/user-applications/10")
+        .set("Authorization", `Bearer ${createToken()}`)
+        .send({
+          applicationId: "abc",
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        error: "applicationId must be a positive integer",
+      });
+      expect(mocks.findOwnedUserApplication).not.toHaveBeenCalled();
+      expect(mocks.updateUserApplication).not.toHaveBeenCalled();
+    });
+
+    it("returns 404 when the relationship is not accessible to the authenticated user", async () => {
+      mocks.findOwnedUserApplication.mockResolvedValue(null);
+      const response = await request(app)
+        .put("/api/user-applications/10")
+        .set("Authorization", `Bearer ${createToken()}`)
+        .send({
+          applicationId: 3,
+        });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.body).toEqual({
+        error: "User application not found",
+      });
+      expect(mocks.updateUserApplication).not.toHaveBeenCalled();
+    });
+
+    it("returns 404 when the application is not found", async () => {
+      mocks.findOwnedUserApplication.mockResolvedValue({
         id: 10,
-      },
-      data: {
-        applicationId: 3,
-      },
-      include: {
-        application: true,
-      },
+        userId: 1,
+        applicationId: 2,
+      });
+      mocks.findApplication.mockResolvedValue(null);
+
+      const response = await request(app)
+        .put("/api/user-applications/10")
+        .set("Authorization", `Bearer ${createToken()}`)
+        .send({
+          applicationId: 10,
+        });
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        error: "Application not found",
+      });
+      expect(mocks.findUniqueUserApplication).not.toHaveBeenCalled();
+      expect(mocks.updateUserApplication).not.toHaveBeenCalled();
     });
   });
 });
