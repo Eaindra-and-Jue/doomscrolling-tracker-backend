@@ -5,7 +5,7 @@ import swaggerJsdoc from "swagger-jsdoc";
 import { prisma } from "./db/prisma.ts";
 import { authRouter } from "./routes/auth.routes.ts";
 import { router as applicationsRouter } from "./routes/applications.ts";
-
+import { usersRouter } from "./routes/users.routes.ts";
 export const app = express();
 
 app.use(cors());
@@ -39,6 +39,10 @@ app.use(express.json());
 
 app.use("/api/auth", authRouter);
 
+app.use("/api/users", usersRouter);
+
+app.use(applicationsRouter);
+
 app.get("/health", (_request, response) => {
   response.json({
     status: "ok",
@@ -61,5 +65,3 @@ app.use((error: unknown, _request: express.Request, response: express.Response, 
     error: "Internal server error",
   });
 });
-
-app.use(applicationsRouter);

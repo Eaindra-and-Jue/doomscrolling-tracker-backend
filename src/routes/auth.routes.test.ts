@@ -126,6 +126,7 @@ describe("user routes", () => {
       passwordHash: "hashed-password",
       streakCount: 0,
       isActive: true,
+      deletedAt: null,
     });
 
     const response = await request(app).post("/api/auth/login").send({
@@ -160,6 +161,7 @@ describe("user routes", () => {
         passwordHash: true,
         streakCount: true,
         isActive: true,
+        deletedAt: true,
       },
     });
     expect(mocks.comparePassword).toHaveBeenCalledWith("password123", "hashed-password");
@@ -173,6 +175,7 @@ describe("user routes", () => {
       passwordHash: "hashed-password",
       streakCount: 0,
       isActive: true,
+      deletedAt: null,
     });
 
     const response = await request(app).post("/api/auth/login").send({
@@ -226,6 +229,7 @@ describe("user routes", () => {
       passwordHash: "hashed-password",
       streakCount: 0,
       isActive: true,
+      deletedAt: null,
     });
     mocks.comparePassword.mockResolvedValue(false);
 
@@ -248,6 +252,30 @@ describe("user routes", () => {
       passwordHash: "hashed-password",
       streakCount: 0,
       isActive: false,
+      deletedAt: null,
+    });
+
+    const response = await request(app).post("/api/auth/login").send({
+      identifier: "testuser",
+      password: "password123",
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({
+      error: "Account is inactive",
+    });
+    expect(mocks.comparePassword).not.toHaveBeenCalled();
+  });
+
+  it("rejects login for a soft-deleted user", async () => {
+    mocks.findUser.mockResolvedValue({
+      id: 1,
+      username: "testuser",
+      email: "test@example.com",
+      passwordHash: "hashed-password",
+      streakCount: 0,
+      isActive: true,
+      deletedAt: new Date(),
     });
 
     const response = await request(app).post("/api/auth/login").send({
