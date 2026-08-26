@@ -201,6 +201,7 @@ authRouter.post("/login", async (request, response, next) => {
         passwordHash: true,
         streakCount: true,
         isActive: true,
+        deletedAt: true,
       },
     });
 
@@ -210,7 +211,7 @@ authRouter.post("/login", async (request, response, next) => {
       });
     }
 
-    if (!user.isActive) {
+    if (!user.isActive || user.deletedAt) {
       return response.status(403).json({
         error: "Account is inactive",
       });
