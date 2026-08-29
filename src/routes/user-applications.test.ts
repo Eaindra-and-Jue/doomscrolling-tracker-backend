@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
 
   findOwnedUserApplication: vi.fn(),
   updateUserApplication: vi.fn(),
+
+  deleteUserApplication: vi.fn(),
 }));
 
 vi.mock("../db/prisma.ts", () => ({
@@ -23,6 +25,7 @@ vi.mock("../db/prisma.ts", () => ({
       create: mocks.createUserApplication,
       findFirst: mocks.findOwnedUserApplication,
       update: mocks.updateUserApplication,
+      delete: mocks.deleteUserApplication,
     },
   },
 }));
@@ -344,6 +347,55 @@ describe("user application routes", () => {
       });
       expect(mocks.findUniqueUserApplication).not.toHaveBeenCalled();
       expect(mocks.updateUserApplication).not.toHaveBeenCalled();
+    });
+
+    it("returns 409 when another relationship already uses the requested application", async () => {
+      mocks.findOwnedUserApplication.mockResolvedValue({
+        id: 10,
+        userId: 1,
+        applicationId: 2,
+      });
+
+      mocks.findApplication.mockResolvedValue({
+        id: 3,
+        name: "YouTube",
+        platform: "android",
+        packageName: "youtube.example.com",
+      });
+
+      mocks.findUniqueUserApplication.mockResolvedValue({
+        id: 11,
+        userId: 1,
+        applicationId: 3,
+      });
+
+      const response = await request(app)
+        .put("/api/user-applications/10")
+        .set("Authorization", `Bearer ${createToken()}`)
+        .send({
+          applicationId: 3,
+        });
+
+      expect(response.status).toBe(409);
+      expect(response.body).toEqual({
+        error: "Application is already assigned to this user",
+      });
+      expect(mocks.updateUserApplication).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("DELETE /api/user-applications/:id", () => {
+    it("returns 400 when the relationship ID is invalid", async () => {
+      const response = await request(app)
+        .delete("/api/user-applications/abc")
+        .set("Authorization", `Bearer ${createToken()}`);
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        error: "id must be a positive integer",
+      });
+      expect(mocks.findOwnedUserApplication).not.toHaveBeenCalled();
+      expect(mocks.deleteUserApplication).not.toHaveBeenCalled();
     });
   });
 });
