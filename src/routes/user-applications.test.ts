@@ -382,6 +382,48 @@ describe("user application routes", () => {
       });
       expect(mocks.updateUserApplication).not.toHaveBeenCalled();
     });
+
+    it("returns 200 when the relationship already uses the requested application", async () => {
+      const existingRelationship = {
+        id: 10,
+        userId: 1,
+        applicationId: 3,
+      };
+      const application = {
+        id: 3,
+        name: "YouTube",
+        platform: "android",
+        packageName: "youtube.example.com",
+      };
+
+      mocks.findOwnedUserApplication.mockResolvedValue(existingRelationship);
+      mocks.findApplication.mockResolvedValue(application);
+      mocks.updateUserApplication.mockResolvedValue({
+        ...existingRelationship,
+        application,
+      });
+
+      const response = await request(app)
+        .put("/api/user-applications/10")
+        .set("Authorization", `Bearer ${createToken()}`)
+        .send({
+          applicationId: 3,
+        });
+
+      expect(response.status).toBe(200);
+      expect(mocks.findUniqueUserApplication).not.toHaveBeenCalled();
+      expect(mocks.updateUserApplication).toHaveBeenCalledWith({
+        where: {
+          id: 10,
+        },
+        data: {
+          applicationId: 3,
+        },
+        include: {
+          application: true,
+        },
+      });
+    });
   });
 
   describe("DELETE /api/user-applications/:id", () => {
@@ -396,6 +438,46 @@ describe("user application routes", () => {
       });
       expect(mocks.findOwnedUserApplication).not.toHaveBeenCalled();
       expect(mocks.deleteUserApplication).not.toHaveBeenCalled();
+    });
+
+    it("returns 404 when the relationship is not accessible to the authenticated user", async () => {
+      mocks.findOwnedUserApplication.mockResolvedValue(null);
+      const response = await request(app)
+        .delete("/api/user-applications/10")
+        .set("Authorization", `Bearer ${createToken()}`);
+
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({
+        error: "User application not found",
+      });
+      expect(mocks.deleteUserApplication).not.toHaveBeenCalled();
+    });
+
+    it("returns 204 when the user application was deleted successfully", async () => {
+      mocks.findOwnedUserApplication.mockResolvedValue({
+        id: 10,
+        userId: 1,
+        applicationId: 3,
+      });
+
+      const response = await request(app)
+        .delete("/api/user-applications/10")
+        .set("Authorization", `Bearer ${createToken()}`);
+
+      expect(response.status).toBe(204);
+      expect(response.body).toEqual({});
+      expect(mocks.findOwnedUserApplication).toHaveBeenCalledWith({
+        where: {
+          id: 10,
+          userId: 1,
+        },
+      });
+      expect(mocks.deleteUserApplication).toHaveBeenCalledWith({
+        where: {
+          id: 10,
+          userId: 1,
+        },
+      });
     });
   });
 });
