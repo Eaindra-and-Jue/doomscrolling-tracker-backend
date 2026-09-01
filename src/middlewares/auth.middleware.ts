@@ -2,17 +2,18 @@ import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { requireJwtSecret } from "../config/env.ts";
 
-type AuthTokenPayload = {
-  sub: string;
+type AuthUserProfile = {
   username: string;
   email: string;
 };
 
+type AuthTokenPayload = {
+  sub: string;
+} & AuthUserProfile;
+
 export type AuthenticatedUser = {
   id: number;
-  username: string;
-  email: string;
-};
+} & AuthUserProfile;
 
 export function createAuthToken(user: AuthenticatedUser): string {
   return jwt.sign(

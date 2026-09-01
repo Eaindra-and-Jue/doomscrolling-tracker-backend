@@ -6,7 +6,9 @@ export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: Number(process.env.PORT ?? DEFAULT_PORT),
   databaseUrl: process.env.DATABASE_URL,
-  jwtSecret: process.env.JWT_SECRET,
+  get jwtSecret() {
+    return process.env.JWT_SECRET;
+  },
 };
 
 export function requireDatabaseUrl(): string {
@@ -18,7 +20,7 @@ export function requireDatabaseUrl(): string {
 }
 
 export function requireJwtSecret(): string {
-  const jwtSecret = process.env.JWT_SECRET;
+  const jwtSecret = env.jwtSecret;
 
   if (!jwtSecret) {
     throw new Error("JWT_SECRET is required. Set it in .env to sign authentication tokens.");
