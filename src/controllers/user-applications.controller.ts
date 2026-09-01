@@ -1,11 +1,15 @@
-import { Router } from "express";
-import { requireAuth } from "../middleware/auth.ts";
+import type { RequestHandler } from "express";
 import { prisma } from "../db/prisma.ts";
 
-export const userApplicationRouter = Router();
-userApplicationRouter.use(requireAuth);
+type UserApplicationBody = {
+  applicationId?: unknown;
+};
 
-userApplicationRouter.get("/", async (request, response, next) => {
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+export const listUserApplications: RequestHandler = async (request, response, next) => {
   try {
     const userId = request.authUser!.id;
 
@@ -25,21 +29,14 @@ userApplicationRouter.get("/", async (request, response, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
 
-userApplicationRouter.post("/", async (request, response, next) => {
+export const createUserApplication: RequestHandler = async (request, response, next) => {
   try {
     const userId = request.authUser!.id;
+    const { applicationId } = request.body as UserApplicationBody;
 
-    const { applicationId } = request.body as {
-      applicationId?: unknown;
-    };
-
-    if (
-      typeof applicationId !== "number" ||
-      !Number.isInteger(applicationId) ||
-      applicationId <= 0
-    ) {
+    if (!isPositiveInteger(applicationId)) {
       response.status(400).json({
         error: "applicationId must be a positive integer",
       });
@@ -91,28 +88,22 @@ userApplicationRouter.post("/", async (request, response, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
 
-userApplicationRouter.put("/:id", async (request, response, next) => {
+export const updateUserApplication: RequestHandler = async (request, response, next) => {
   try {
     const userId = request.authUser!.id;
-    const { applicationId } = request.body as {
-      applicationId?: unknown;
-    };
+    const { applicationId } = request.body as UserApplicationBody;
     const relationshipId = Number(request.params.id);
 
-    if (!Number.isInteger(relationshipId) || relationshipId <= 0) {
+    if (!isPositiveInteger(relationshipId)) {
       response.status(400).json({
         error: "id must be a positive integer",
       });
       return;
     }
 
-    if (
-      typeof applicationId !== "number" ||
-      !Number.isInteger(applicationId) ||
-      applicationId <= 0
-    ) {
+    if (!isPositiveInteger(applicationId)) {
       response.status(400).json({
         error: "applicationId must be a positive integer",
       });
@@ -182,14 +173,14 @@ userApplicationRouter.put("/:id", async (request, response, next) => {
   } catch (error) {
     next(error);
   }
-});
+};
 
-userApplicationRouter.delete("/:id", async (request, response, next) => {
+export const deleteUserApplication: RequestHandler = async (request, response, next) => {
   try {
     const userId = request.authUser!.id;
     const relationshipId = Number(request.params.id);
 
-    if (!Number.isInteger(relationshipId) || relationshipId <= 0) {
+    if (!isPositiveInteger(relationshipId)) {
       response.status(400).json({
         error: "id must be a positive integer",
       });
@@ -221,4 +212,4 @@ userApplicationRouter.delete("/:id", async (request, response, next) => {
   } catch (error) {
     next(error);
   }
-});
+};

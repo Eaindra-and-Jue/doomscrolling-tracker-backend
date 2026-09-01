@@ -26,6 +26,7 @@ function isNonEmptyString(value: unknown): value is string {
  * @openapi
  * /api/auth/register:
  *   post:
+ *     tags: [Authentication]
  *     summary: Register a new user
  *     requestBody:
  *       required: true
@@ -131,6 +132,7 @@ authRouter.post("/register", async (request, response, next) => {
  * @openapi
  * /api/auth/login:
  *   post:
+ *     tags: [Authentication]
  *     summary: Log in an existing user
  *     requestBody:
  *       required: true
@@ -242,6 +244,7 @@ authRouter.post("/login", async (request, response, next) => {
  * @openapi
  * /api/auth/me:
  *   get:
+ *     tags: [Authentication]
  *     summary: Get current authenticated user
  *     security:
  *       - bearerAuth: []

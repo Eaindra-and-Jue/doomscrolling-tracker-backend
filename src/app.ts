@@ -1,45 +1,27 @@
 import cors from "cors";
 import express from "express";
 import swaggerUi from "swagger-ui-express";
-import swaggerJsdoc from "swagger-jsdoc";
 import { prisma } from "./db/prisma.ts";
-import { userApplicationRouter } from "./routes/user-applications.ts";
+import { swaggerSpec } from "./docs/swagger.ts";
+import { errorHandler } from "./middlewares/error.middleware.ts";
+import { userApplicationRouter } from "./routes/user-applications.routes.ts";
 import { authRouter } from "./routes/auth.routes.ts";
-import { router as applicationsRouter } from "./routes/applications.ts";
+import { router as applicationsRouter } from "./routes/applications.routes.ts";
 
 export const app = express();
 
 app.use(cors());
 
-const swaggerOptions = {
-  definition: {
-    openapi: "3.0.0",
-    info: {
-      title: "doomscrolling-tracker-backend",
-      version: "1.0.0",
-      description: "API docs for the doomscrolling-tracker-backend",
-    },
-    components: {
-      securitySchemes: {
-        bearerAuth: {
-          type: "http",
-          scheme: "bearer",
-          bearerFormat: "JWT",
-        },
-      },
-    },
-  },
-  apis: ["./src/routes/*.ts", "./src/app.ts"],
-}
-
-const swaggerSpec = swaggerJsdoc(swaggerOptions);
-
+app.get("/docs.json", (_request, response) => {
+  response.json(swaggerSpec);
+});
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use(express.json());
 
 app.use("/api/user-applications", userApplicationRouter);
 app.use("/api/auth", authRouter);
+app.use(applicationsRouter);
 
 app.get("/health", (_request, response) => {
   response.json({
@@ -57,11 +39,4 @@ app.get("/health/db", async (_request, response, next) => {
   }
 });
 
-app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
-  console.error(error);
-  response.status(500).json({
-    error: "Internal server error",
-  });
-});
-
-app.use(applicationsRouter);
+app.use(errorHandler);
