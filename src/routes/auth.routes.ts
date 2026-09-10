@@ -290,7 +290,7 @@ authRouter.post("/login", async (request, response, next) => {
  * /api/auth/refresh:
  *   post:
  *     summary: Refresh the access token
- *     description: Uses the HTTP-only refresh token cookie to issue a new access token and rotate the refresh token.
+ *     description: Uses the HTTP-only refresh token cookie to issue a new access token and rotate the refresh token. Browser clients must send credentials, and native Flutter clients must persist and resend this cookie securely.
  *     responses:
  *       200:
  *         description: Access token refreshed successfully
@@ -402,7 +402,7 @@ authRouter.post("/refresh", async (request, response, next) => {
  * /api/auth/logout:
  *   post:
  *     summary: Log out the current session
- *     description: Revokes the stored refresh token when present and clears the refresh token cookie.
+ *     description: Revokes the stored refresh token when present and clears the refresh token cookie. Browser clients must send credentials, and native Flutter clients must persist and resend this cookie securely.
  *     responses:
  *       200:
  *         description: Logout completed successfully
