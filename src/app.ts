@@ -1,14 +1,21 @@
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import express from "express";
 import swaggerUi from "swagger-ui-express";
 import swaggerJsdoc from "swagger-jsdoc";
+import { env } from "./config/env.ts";
 import { prisma } from "./db/prisma.ts";
 import { authRouter } from "./routes/auth.routes.ts";
 import { router as applicationsRouter } from "./routes/applications.ts";
 
 export const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    credentials: true,
+    origin: env.nodeEnv === "production" ? env.corsOrigin ?? false : true,
+  }),
+);
 
 const swaggerOptions = {
   definition: {
@@ -35,9 +42,11 @@ const swaggerSpec = swaggerJsdoc(swaggerOptions);
 
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+app.use(cookieParser());
 app.use(express.json());
 
 app.use("/api/auth", authRouter);
+app.use(applicationsRouter);
 
 app.get("/health", (_request, response) => {
   response.json({
@@ -61,5 +70,3 @@ app.use((error: unknown, _request: express.Request, response: express.Response, 
     error: "Internal server error",
   });
 });
-
-app.use(applicationsRouter);

@@ -40,3 +40,9 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/doomscrolling_tracke
 
 - `GET /health` - API health
 - `GET /health/db` - PostgreSQL connectivity through Prisma
+
+## Authentication Session Notes
+
+- Refresh and logout use the `refreshToken` HTTP-only cookie.
+- Browser clients must call refresh/logout with credentials enabled.
+- Native Flutter Android/iOS clients must use a secure persistent cookie manager so the refresh cookie is retained and sent with refresh/logout requests.
