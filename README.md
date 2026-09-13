@@ -40,3 +40,9 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/doomscrolling_tracke
 
 - `GET /health` - API health
 - `GET /health/db` - PostgreSQL connectivity through Prisma
+
+## API Documentation
+
+Start the server and open `http://localhost:3000/docs/` for the interactive Swagger UI.
+
+The generated OpenAPI document is also available as JSON at `GET /docs.json`.

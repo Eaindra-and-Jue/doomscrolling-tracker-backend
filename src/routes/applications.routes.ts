@@ -7,6 +7,7 @@ export const router = express.Router();
  * @openapi
  * /applications:
  *   get:
+ *     tags: [Applications]
  *     summary: List applications
  *     parameters:
  *       - in: query
