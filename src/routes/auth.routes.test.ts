@@ -7,6 +7,11 @@ const mocks = vi.hoisted(() => ({
   findUser: vi.fn(),
   comparePassword: vi.fn(),
   hashPassword: vi.fn(),
+  createPasswordResetToken: vi.fn(),
+  findPasswordResetToken: vi.fn(),
+  claimPasswordResetToken: vi.fn(),
+  updateUser: vi.fn(),
+  transaction: vi.fn(),
 }));
 
 vi.mock("../db/prisma.ts", () => ({
@@ -14,7 +19,14 @@ vi.mock("../db/prisma.ts", () => ({
     user: {
       create: mocks.createUser,
       findFirst: mocks.findUser,
+      update: mocks.updateUser,
     },
+    passwordResetToken: {
+      create: mocks.createPasswordResetToken,
+      findUnique: mocks.findPasswordResetToken,
+      updateMany: mocks.claimPasswordResetToken,
+    },
+    $transaction: mocks.transaction,
   },
 }));
 
@@ -32,6 +44,15 @@ describe("user routes", () => {
     process.env.JWT_SECRET = "test-secret";
     mocks.comparePassword.mockResolvedValue(true);
     mocks.hashPassword.mockResolvedValue("hashed-password");
+    mocks.createPasswordResetToken.mockResolvedValue({ id: 1 });
+    mocks.updateUser.mockResolvedValue({ id: 1 });
+    mocks.claimPasswordResetToken.mockResolvedValue({ count: 1 });
+    mocks.transaction.mockImplementation(async (callback) =>
+      callback({
+        user: { update: mocks.updateUser },
+        passwordResetToken: { updateMany: mocks.claimPasswordResetToken },
+      }),
+    );
   });
 
   afterEach(() => {
@@ -260,6 +281,177 @@ describe("user routes", () => {
       error: "Account is inactive",
     });
     expect(mocks.comparePassword).not.toHaveBeenCalled();
+  });
+
+  it("creates a hashed password reset token for an active user", async () => {
+    mocks.findUser.mockResolvedValue({ id: 1 });
+
+    const response = await request(app).post("/api/auth/forgot-password").send({
+      email: " TEST@example.com ",
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      message: "If an account exists for that email, password reset instructions have been created.",
+    });
+    expect(mocks.findUser).toHaveBeenCalledWith({
+      where: {
+        email: "test@example.com",
+        isActive: true,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    expect(mocks.createPasswordResetToken).toHaveBeenCalledWith({
+      data: {
+        userId: 1,
+        tokenHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+        expiresAt: expect.any(Date),
+      },
+    });
+    expect(response.body.token).toBeUndefined();
+  });
+
+  it("returns the same forgot-password response for an unknown email", async () => {
+    mocks.findUser.mockResolvedValue(null);
+
+    const response = await request(app).post("/api/auth/forgot-password").send({
+      email: "missing@example.com",
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      message: "If an account exists for that email, password reset instructions have been created.",
+    });
+    expect(mocks.createPasswordResetToken).not.toHaveBeenCalled();
+  });
+
+  it("rejects forgot-password when email is missing", async () => {
+    const response = await request(app).post("/api/auth/forgot-password").send({});
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: "email is required" });
+    expect(mocks.findUser).not.toHaveBeenCalled();
+  });
+
+  it("resets a password with a valid one-time token", async () => {
+    mocks.findPasswordResetToken.mockResolvedValue({
+      id: 10,
+      expiresAt: new Date(Date.now() + 60_000),
+      usedAt: null,
+      user: {
+        id: 1,
+        isActive: true,
+        deletedAt: null,
+      },
+    });
+    mocks.hashPassword.mockResolvedValue("new-hashed-password");
+
+    const response = await request(app).post("/api/auth/reset-password").send({
+      token: "plain-reset-token",
+      newPassword: "new-password123",
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ message: "Password reset successfully" });
+    expect(mocks.findPasswordResetToken).toHaveBeenCalledWith({
+      where: { tokenHash: expect.stringMatching(/^[a-f0-9]{64}$/) },
+      select: {
+        id: true,
+        expiresAt: true,
+        usedAt: true,
+        user: {
+          select: {
+            id: true,
+            isActive: true,
+            deletedAt: true,
+          },
+        },
+      },
+    });
+    expect(mocks.hashPassword).toHaveBeenCalledWith("new-password123", 12);
+    expect(mocks.claimPasswordResetToken).toHaveBeenCalledWith({
+      where: {
+        id: 10,
+        usedAt: null,
+        expiresAt: { gt: expect.any(Date) },
+      },
+      data: { usedAt: expect.any(Date) },
+    });
+    expect(mocks.updateUser).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { passwordHash: "new-hashed-password" },
+    });
+    expect(mocks.transaction).toHaveBeenCalledWith(expect.any(Function));
+  });
+
+  it("allows only one request to consume a reset token", async () => {
+    mocks.findPasswordResetToken.mockResolvedValue({
+      id: 10,
+      expiresAt: new Date(Date.now() + 60_000),
+      usedAt: null,
+      user: { id: 1, isActive: true, deletedAt: null },
+    });
+    mocks.claimPasswordResetToken.mockResolvedValue({ count: 0 });
+
+    const response = await request(app).post("/api/auth/reset-password").send({
+      token: "already-claimed-token",
+      newPassword: "new-password123",
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: "Reset token is invalid or expired" });
+    expect(mocks.updateUser).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["unknown", null],
+    ["expired", { id: 10, expiresAt: new Date(0), usedAt: null, user: { id: 1, isActive: true, deletedAt: null } }],
+    ["already used", { id: 10, expiresAt: new Date(Date.now() + 60_000), usedAt: new Date(), user: { id: 1, isActive: true, deletedAt: null } }],
+  ])("rejects an %s reset token", async (_case, storedToken) => {
+    mocks.findPasswordResetToken.mockResolvedValue(storedToken);
+
+    const response = await request(app).post("/api/auth/reset-password").send({
+      token: "invalid-reset-token",
+      newPassword: "new-password123",
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: "Reset token is invalid or expired" });
+    expect(mocks.hashPassword).not.toHaveBeenCalled();
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects reset-password for an inactive user", async () => {
+    mocks.findPasswordResetToken.mockResolvedValue({
+      id: 10,
+      expiresAt: new Date(Date.now() + 60_000),
+      usedAt: null,
+      user: {
+        id: 1,
+        isActive: false,
+        deletedAt: null,
+      },
+    });
+
+    const response = await request(app).post("/api/auth/reset-password").send({
+      token: "valid-reset-token",
+      newPassword: "new-password123",
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.body).toEqual({ error: "Account is inactive" });
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects reset-password when required fields are missing", async () => {
+    const response = await request(app).post("/api/auth/reset-password").send({
+      token: "reset-token",
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: "token and newPassword are required" });
+    expect(mocks.findPasswordResetToken).not.toHaveBeenCalled();
   });
 
   it("rejects protected requests without a bearer token", async () => {

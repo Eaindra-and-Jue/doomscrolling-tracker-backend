@@ -1,9 +1,14 @@
 import bcrypt from "bcryptjs";
+import { createHash, randomBytes } from "node:crypto";
 import { Router } from "express";
 import { prisma } from "../db/prisma.ts";
 import { createAuthToken, requireAuth } from "../middlewares/auth.middleware.ts";
 
 const SALT_ROUNDS = 12;
+const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
+const PASSWORD_RESET_SUCCESS_MESSAGE = "If an account exists for that email, password reset instructions have been created.";
+
+class ResetTokenAlreadyUsedError extends Error {}
 
 export const authRouter = Router();
 
@@ -18,8 +23,21 @@ type LoginRequestBody = {
   password?: unknown;
 };
 
+type ForgotPasswordRequestBody = {
+  email?: unknown;
+};
+
+type ResetPasswordRequestBody = {
+  token?: unknown;
+  newPassword?: unknown;
+};
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
+}
+
+function hashResetToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
 }
 
 /**
@@ -235,6 +253,165 @@ authRouter.post("/login", async (request, response, next) => {
     const token = createAuthToken(authenticatedUser);
 
     return response.json({ user: authenticatedUser, token });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @openapi
+ * /api/auth/forgot-password:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Request a password reset
+ *     description: Always returns the same response so registered email addresses are not exposed. Email delivery will be added separately.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: test@example.com
+ *     responses:
+ *       200:
+ *         description: Password reset request accepted
+ *       400:
+ *         description: Email is missing
+ */
+authRouter.post("/forgot-password", async (request, response, next) => {
+  try {
+    const { email } = request.body as ForgotPasswordRequestBody;
+
+    if (!isNonEmptyString(email)) {
+      return response.status(400).json({ error: "email is required" });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        email: email.trim().toLowerCase(),
+        isActive: true,
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+
+    if (user) {
+      const resetToken = randomBytes(32).toString("hex");
+
+      await prisma.passwordResetToken.create({
+        data: {
+          userId: user.id,
+          tokenHash: hashResetToken(resetToken),
+          expiresAt: new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS),
+        },
+      });
+
+      // Pass resetToken to the email delivery service once that integration is available.
+    }
+
+    return response.json({ message: PASSWORD_RESET_SUCCESS_MESSAGE });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @openapi
+ * /api/auth/reset-password:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Reset a password using a one-time token
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [token, newPassword]
+ *             properties:
+ *               token:
+ *                 type: string
+ *               newPassword:
+ *                 type: string
+ *                 format: password
+ *                 example: new-password123
+ *     responses:
+ *       200:
+ *         description: Password reset successfully
+ *       400:
+ *         description: Missing fields or invalid, expired, or already-used token
+ *       403:
+ *         description: Account is inactive or deleted
+ */
+authRouter.post("/reset-password", async (request, response, next) => {
+  try {
+    const { token, newPassword } = request.body as ResetPasswordRequestBody;
+
+    if (!isNonEmptyString(token) || !isNonEmptyString(newPassword)) {
+      return response.status(400).json({ error: "token and newPassword are required" });
+    }
+
+    const passwordResetToken = await prisma.passwordResetToken.findUnique({
+      where: { tokenHash: hashResetToken(token) },
+      select: {
+        id: true,
+        expiresAt: true,
+        usedAt: true,
+        user: {
+          select: {
+            id: true,
+            isActive: true,
+            deletedAt: true,
+          },
+        },
+      },
+    });
+
+    if (!passwordResetToken || passwordResetToken.usedAt || passwordResetToken.expiresAt <= new Date()) {
+      return response.status(400).json({ error: "Reset token is invalid or expired" });
+    }
+
+    if (!passwordResetToken.user.isActive || passwordResetToken.user.deletedAt) {
+      return response.status(403).json({ error: "Account is inactive" });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    const usedAt = new Date();
+
+    try {
+      await prisma.$transaction(async (transaction) => {
+        const claimedToken = await transaction.passwordResetToken.updateMany({
+          where: {
+            id: passwordResetToken.id,
+            usedAt: null,
+            expiresAt: { gt: usedAt },
+          },
+          data: { usedAt },
+        });
+
+        if (claimedToken.count !== 1) {
+          throw new ResetTokenAlreadyUsedError();
+        }
+
+        await transaction.user.update({
+          where: { id: passwordResetToken.user.id },
+          data: { passwordHash },
+        });
+      });
+    } catch (error) {
+      if (error instanceof ResetTokenAlreadyUsedError) {
+        return response.status(400).json({ error: "Reset token is invalid or expired" });
+      }
+
+      throw error;
+    }
+
+    return response.json({ message: "Password reset successfully" });
   } catch (error) {
     next(error);
   }
